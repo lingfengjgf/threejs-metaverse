@@ -23,7 +23,7 @@ camera.position.set(20,20,10);
 scene.background = new THREE.Color(0.2,0.2,0.2);
 
 // 环境光
-const ambientLight = new THREE.AmbientLight(0xffffff,0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff,0.8);
 scene.add(ambientLight);
 
 // 方向光
@@ -44,12 +44,12 @@ directionLight.shadow.mapSize.width = 4096;
 directionLight.shadow.mapSize.height = 4096;
 
 // 方向光辅助体
-const dirHelper = new THREE.DirectionalLightHelper(directionLight, 5);
-scene.add(dirHelper);
+// const dirHelper = new THREE.DirectionalLightHelper(directionLight, 5);
+// scene.add(dirHelper);
 
 // 相机辅助体
-const camHelper = new THREE.CameraHelper(directionLight.shadow.camera);
-scene.add(camHelper);
+// const camHelper = new THREE.CameraHelper(directionLight.shadow.camera);
+// scene.add(camHelper);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 
@@ -57,6 +57,8 @@ const controls = new OrbitControls(camera, renderer.domElement);
 // const boxMaterial = new THREE.MeshBasicMaterial({color:0x00ff00});
 // const boxMesh = new THREE.Mesh(boxGeometry,boxMaterial);
 // scene.add(boxMesh);
+
+let car01;
 
 const gltfLoader = new GLTFLoader();
 gltfLoader.load('scene.glb',(gltf)=>{
@@ -67,8 +69,15 @@ gltfLoader.load('scene.glb',(gltf)=>{
       child.receiveShadow = true;
     }
   })
+
+  car01 = scene.getObjectByName("小车1");
 })
 
+// window.addEventListener('keydown', e => {
+//   if (e.key === 'f') {
+//     console.log(scene.getObjectByName("小车1"));
+//   }
+// })
 // 帧循环
 function animate(){
   requestAnimationFrame(animate);
@@ -76,6 +85,10 @@ function animate(){
   renderer.render(scene,camera);
 
   controls.update();
+
+  if (car01) {
+    car01.position.y += 0.01;
+  }
 
 }
 
