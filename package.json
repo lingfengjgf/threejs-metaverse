@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "gsap": "^3.12.5",
     "three": "^0.150.1",
     "vue": "^3.2.45"
   },
