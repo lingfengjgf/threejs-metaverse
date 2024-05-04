@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 console.log(THREE);
 
@@ -10,7 +11,7 @@ const scene = new THREE.Scene();
 // 创建相机
 const camera = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.01,200);
 // 创建渲染器
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer({antialias: true});
 // 打开renderer阴影
 renderer.shadowMap.enabled = true;
 // 阴影贴图类型
@@ -24,7 +25,7 @@ camera.position.set(40,10,40);
 scene.background = new THREE.Color(0.2,0.2,0.2);
 
 // 环境光
-const ambientLight = new THREE.AmbientLight(0xffffff,0.8);
+const ambientLight = new THREE.AmbientLight(0xffffff,0.2);
 scene.add(ambientLight);
 
 // 方向光
@@ -52,7 +53,7 @@ directionLight.shadow.mapSize.height = 4096;
 // const camHelper = new THREE.CameraHelper(directionLight.shadow.camera);
 // scene.add(camHelper);
 
-const controls = new OrbitControls(camera, renderer.domElement);
+// const controls = new OrbitControls(camera, renderer.domElement);
 
 // const boxGeometry = new THREE.BoxGeometry(1,1,1);
 // const boxMaterial = new THREE.MeshBasicMaterial({color:0x00ff00});
@@ -60,9 +61,60 @@ const controls = new OrbitControls(camera, renderer.domElement);
 // scene.add(boxMesh);
 
 let car01;
-let mixer;
+let mixer01;
+let mixerPlayer;
+let playerMesh;
+const canRaycastMeshes = [];
+
+new RGBELoader().load('sky.hdr', hdrTexture => {
+  scene.background = hdrTexture;
+  hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+  scene.environment = hdrTexture;
+
+  scene.backgroundBlurriness = 0.5;
+  scene.backgroundIntensity = 0.5;
+
+  renderer.outputEncoding = THREE.sRGBEncoding;
+})
 
 const gltfLoader = new GLTFLoader();
+
+
+// window.addEventListener('keydown', e => {
+//   if (e.key === 'f') {
+
+//   }
+// })
+let actionIdle, actionWalk, actionRun;
+gltfLoader.load('player01.glb', gltf => {
+  playerMesh = gltf.scene;
+  scene.add(playerMesh);
+
+  mixerPlayer = new THREE.AnimationMixer(playerMesh);
+  const clipIdle = THREE.AnimationUtils.subclip(gltf.animations[0], 'idle', 0, 61);
+  const clipWalk = THREE.AnimationUtils.subclip(gltf.animations[0], 'walk', 70, 101);
+  const clipRun = THREE.AnimationUtils.subclip(gltf.animations[0], 'run', 110, 126);
+
+  actionIdle = mixerPlayer.clipAction(clipIdle);
+  actionIdle.play();
+  actionWalk = mixerPlayer.clipAction(clipWalk);
+  // actionWalk.play();
+  actionRun = mixerPlayer.clipAction(clipRun);
+  // actionRun.play();
+
+  playerMesh.add(camera);
+  camera.position.set(0, 3, -6);
+  camera.lookAt(playerMesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
+})
+
+let yanhuatongGltf;
+gltfLoader.load('yanhuatong01.glb', gltf => {
+  scene.add(gltf.scene);
+  yanhuatongGltf = gltf;
+  gltf.scene.traverse(child => {
+    canRaycastMeshes.push(child);
+  })
+})
 gltfLoader.load('scene.glb',(gltf)=>{
   scene.add(gltf.scene);
   gltf.scene.traverse(child=>{
@@ -70,18 +122,18 @@ gltfLoader.load('scene.glb',(gltf)=>{
       child.castShadow = true;
       child.receiveShadow = true;
     }
+
+    if (child.name.indexOf('金蛋') > -1) {
+      canRaycastMeshes.push(child);
+    }
   })
 
   car01 = scene.getObjectByName("小车1");
-
-  mixer = new THREE.AnimationMixer(gltf.scene);
-  const clips = gltf.animations;
-  clips.forEach(clip => {
-    const action = mixer.clipAction(clip);
-    // action.loop = THREE.LoopOnce;
-    // console.log('action:', action);
-    action.play();
+  car01.traverse(child => {
+    child.userData['car01Group'] = car01;
+    canRaycastMeshes.push(child);
   })
+  // console.log('car01:',car01);
 
   // GSAP核心
   // gsap.to(targets,vars)：开始的位置到结束的位置。
@@ -134,7 +186,7 @@ gltfLoader.load('scene.glb',(gltf)=>{
 
 let sunMesh, earthMesh, moonMesh;
 function addDynamicType01(mesh) {
-  const material = new THREE.MeshStandardMaterial({color: 0xffffff});
+  const material = new THREE.MeshStandardMaterial({color: 0x999999, metalness: 0.2, roughness: 0.1});
 
   const sphereGeoSun = new THREE.SphereGeometry(1);
   sunMesh = new THREE.Mesh(sphereGeoSun, material);
@@ -230,20 +282,142 @@ textureLoader.load('particle02.png', texture => {
   scene.add(points);
 });
 
+// 射线拾取
+let pointScreen = new THREE.Vector2();
+let pointThreejs = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+
+function checkRaycaster() {
+  pointThreejs.x = (pointScreen.x / window.innerWidth) * 2 - 1;
+  pointThreejs.y = (pointScreen.y / window.innerHeight) * -2 + 1;
+  // console.log(pointThreejs.x, pointThreejs.y);
+
+  raycaster.setFromCamera(pointThreejs, camera);
+  const intersects = raycaster.intersectObjects(canRaycastMeshes);
+  console.log(intersects);
+
+  if (intersects.length && intersects[0].object.name === "yanhuatong") {
+    const yanhuatong = scene.getObjectByName('yanhuatongGroup');
+    yanhuatong.rotateY(30);
+
+    mixer01 = new THREE.AnimationMixer(yanhuatongGltf.scene);
+    const clips = yanhuatongGltf.animations;
+    clips.forEach(clip => {
+      const action = mixer01.clipAction(clip);
+      action.loop = THREE.LoopOnce;
+      action.clampWhenFinished = true;
+      // console.log('action:', action);
+      action.play();
+    })
+  }
+
+  if (intersects.length && intersects[0].object.userData['car01Group']) {
+    const car01Ins = intersects[0].object.userData['car01Group'];
+    car01Ins.scale.x += 0.1;
+    car01Ins.scale.y += 0.1;
+    car01Ins.scale.z += 0.1;
+  }
+
+  if (intersects.length && intersects[0].object.name.indexOf('金蛋') > -1) {
+    console.log(intersects[0].object.name);
+    const egg = intersects[0].object;
+    const newEggMaterial = egg.material.clone();
+    egg.material = newEggMaterial;
+    egg.material.color = new THREE.Color(0, 255, 0);
+  }
+}
 
 
-// window.addEventListener('keydown', e => {
-//   if (e.key === 'f') {
-//     console.log(scene.getObjectByName("小车1"));
-//   }
-// })
+// 动画切换
+function crossPlay(curAction, newAction) {
+  curAction.fadeOut(0.3);
+  newAction.reset();
+  newAction.setEffectiveWeight(1);
+  newAction.play();
+  newAction.fadeIn(0.3);
+}
+
+let isWalk = false;
+let isRun = false;
+let preWalkTime;
+window.addEventListener('keydown', keycode => {
+  if (keycode.key === 'w') {
+    if (playerMesh) {
+      if (!isWalk) {
+        // actionWalk.play();
+        crossPlay(actionIdle, actionWalk);
+        isWalk = true;
+      }
+
+      if (!preWalkTime) {
+        preWalkTime = clock.getElapsedTime();
+      }
+
+      if (!isRun && clock.getElapsedTime() - preWalkTime > 2) {
+        // actionWalk.stop();
+        // actionRun.play();
+        crossPlay(actionWalk, actionRun);
+        isRun = true;
+      }
+      if (isWalk) {
+        playerMesh.translateZ(0.1);
+      }
+      if (isRun) {
+        playerMesh.translateZ(0.2);
+      }
+    }
+  }
+})
+
+window.addEventListener('keyup', keycode => {
+  if (keycode.key === 'w') {
+    if (playerMesh) {
+      if (isRun) {
+        crossPlay(actionRun, actionIdle);
+        isRun = false;
+      } else if (isWalk) {
+        crossPlay(actionWalk, actionIdle);
+      }
+      isWalk = false;
+      preWalkTime = 0;
+    }
+  }
+})
+
+let preScreenX;
+let mouseOffsetScreen;
+window.addEventListener('mousemove', e => {
+  if (preScreenX) {
+    mouseOffsetScreen = e.clientX - preScreenX;
+    if (mouseOffsetScreen > 0) {
+      playerMesh.rotateY(-0.01);
+    } else {
+      playerMesh.rotateY(0.01);
+    }
+  }
+  preScreenX = e.clientX;
+})
+
+
+window.addEventListener('click', e => {
+  checkRaycaster();
+})
+
+window.addEventListener('mousemove', e => {
+  pointScreen.x = e.clientX;
+  pointScreen.y = e.clientY;
+})
+
+
+const clock = new THREE.Clock();
+let deltaTime;
 // 帧循环
 function animate(){
   requestAnimationFrame(animate);
 
   renderer.render(scene,camera);
-
-  controls.update();
+  
+  // controls.update();
 
   // if (car01) {
   //   car01.position.y += 0.01;
@@ -255,8 +429,14 @@ function animate(){
   //   moonMesh.rotateY(0.01);
   // }
 
-  if (mixer) {
-    mixer.update(0.02);
+  deltaTime = clock.getDelta();
+  // console.log('deltaTime:', deltaTime);
+  if (mixer01) {
+    mixer01.update(deltaTime);
+  }
+
+  if (mixerPlayer) {
+    mixerPlayer.update(deltaTime);
   }
 }
 
