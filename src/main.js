@@ -60,6 +60,10 @@ directionLight.shadow.mapSize.height = 4096;
 // const boxMesh = new THREE.Mesh(boxGeometry,boxMaterial);
 // scene.add(boxMesh);
 
+
+const clock = new THREE.Clock();
+let deltaTime;
+
 let car01;
 let mixer01;
 let mixerPlayer;
@@ -102,9 +106,11 @@ gltfLoader.load('player01.glb', gltf => {
   actionRun = mixerPlayer.clipAction(clipRun);
   // actionRun.play();
 
-  playerMesh.add(camera);
-  camera.position.set(0, 3, -6);
-  camera.lookAt(playerMesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
+  // playerMesh.add(camera);
+  // camera.position.set(0, 3, -6);
+  // camera.lookAt(playerMesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
+
+  setThirdViewControl(playerMesh);
 })
 
 let yanhuatongGltf;
@@ -121,11 +127,12 @@ gltfLoader.load('scene.glb',(gltf)=>{
     if(child.type === 'Mesh'){
       child.castShadow = true;
       child.receiveShadow = true;
-    }
-
-    if (child.name.indexOf('金蛋') > -1) {
       canRaycastMeshes.push(child);
     }
+
+    // if (child.name.indexOf('金蛋') > -1) {
+    //   canRaycastMeshes.push(child);
+    // }
   })
 
   car01 = scene.getObjectByName("小车1");
@@ -327,6 +334,21 @@ function checkRaycaster() {
   }
 }
 
+// 角色不动时第三人称控制相机
+let visualTargetMesh;
+function setThirdViewControl(playerMesh) {
+  // 创建虚拟物体
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+  const boxMat = new THREE.MeshBasicMaterial({color: 0x00ff00});
+  visualTargetMesh = new THREE.Mesh(boxGeo, boxMat);
+  scene.add(visualTargetMesh);
+  // playerMesh.add(visualTargetMesh);
+  visualTargetMesh.add(camera);
+  camera.position.set(0, 3, -6);
+  camera.lookAt(visualTargetMesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
+  visualTargetMesh.visible = false;
+}
+
 
 // 动画切换
 function crossPlay(curAction, newAction) {
@@ -340,9 +362,47 @@ function crossPlay(curAction, newAction) {
 let isWalk = false;
 let isRun = false;
 let preWalkTime;
+let rorateSpeed = 0;
+let playerFrontVec = new THREE.Vector3(0, 0, 0);
+const playerFrontOffset = new THREE.Vector3(0, 0.9, 0);
+let playerUpVec = new THREE.Vector3(0, 1, 0);
+let playerDownVec = new THREE.Vector3(0, -1, 0);
 window.addEventListener('keydown', keycode => {
   if (keycode.key === 'w') {
     if (playerMesh) {
+      // playerMesh.rotation.copy(visualTargetMesh.rotation);
+      const playerDirection =  new THREE.Vector3();
+      playerMesh.getWorldDirection(playerDirection);
+      playerDirection.y = 0;
+  
+      const visualDirection =  new THREE.Vector3();
+      visualTargetMesh.getWorldDirection(visualDirection);
+      visualDirection.y = 0;
+  
+      const radian = playerDirection.angleTo(visualDirection);
+  
+      // playerMesh.rotateY(radian);
+  
+      visualTargetMesh.position.copy(playerMesh.position);
+  
+      // 判断旋转方向
+      rorateSpeed = deltaTime * 10;
+      playerDirection.cross(visualDirection);
+      if (playerDirection.y > 0) {
+        if (radian > rorateSpeed) {
+          playerMesh.rotateY(rorateSpeed);
+        } else {
+          playerMesh.rotateY(radian);
+        }
+      }
+      if (playerDirection.y < 0) {
+        if (radian > rorateSpeed) {
+          playerMesh.rotateY(-rorateSpeed);
+        } else {
+          playerMesh.rotateY(-radian);
+        }
+      }
+
       if (!isWalk) {
         // actionWalk.play();
         crossPlay(actionIdle, actionWalk);
@@ -365,7 +425,55 @@ window.addEventListener('keydown', keycode => {
       if (isRun) {
         playerMesh.translateZ(0.2);
       }
+
+      // 角色碰撞检测
+      // 向前
+      playerMesh.getWorldDirection(playerFrontVec);
+      const raycasterFront = new THREE.Raycaster(playerMesh.position.clone().add(playerFrontOffset), playerFrontVec);
+      const collisionFront = raycasterFront.intersectObjects(canRaycastMeshes);
+      // console.log(collisionFront);
+      if (collisionFront && collisionFront.length && collisionFront[0].distance < 1.5) {
+        return ;
+      }
+  
+      // 向上
+      const raycasterUp = new THREE.Raycaster(playerMesh.position, playerUpVec);
+      const collisionUp = raycasterUp.intersectObjects(canRaycastMeshes);
+      // console.log(collisionUp);
+      let maxY = -1;
+      collisionUp.forEach(item => {
+        if (item.distance < 0.6 && item.point.y > maxY) {
+          maxY = item.point.y;
+        }
+      })
+      if (maxY != -1) {
+        playerMesh.position.setY(maxY);
+        return ;
+      }
+      // 向下
+      const raycasterDown = new THREE.Raycaster(playerMesh.position, playerDownVec);
+      const collisionDown = raycasterDown.intersectObjects(canRaycastMeshes);
+      // console.log(collisionDown);
+      if (collisionDown && collisionDown.length && collisionDown[0].distance < 0.6) {
+        playerMesh.position.setY(collisionDown[0].point.y);
+      }
     }
+
+
+  }
+})
+
+let isKeyWDown = false;
+window.addEventListener('mousedown', e => {
+  if (e.button === 0) {
+    // 鼠标左键按下
+    isKeyWDown = true;
+  }
+})
+window.addEventListener('mouseup', e => {
+  if (e.button === 0) {
+    // 鼠标左键按下
+    isKeyWDown = false;
   }
 })
 
@@ -384,33 +492,73 @@ window.addEventListener('keyup', keycode => {
   }
 })
 
-let preScreenX;
-let mouseOffsetScreen;
-window.addEventListener('mousemove', e => {
-  if (preScreenX) {
-    mouseOffsetScreen = e.clientX - preScreenX;
-    if (mouseOffsetScreen > 0) {
-      playerMesh.rotateY(-0.01);
-    } else {
-      playerMesh.rotateY(0.01);
-    }
+let scrollSpeed = 0;
+window.addEventListener('wheel', e => {
+  scrollSpeed = deltaTime * 20;
+  if (e.deltaY > 0) {
+    camera.translateZ(-scrollSpeed);
   }
-  preScreenX = e.clientX;
+  if (e.deltaY < 0) {
+    camera.translateZ(scrollSpeed);
+  }
 })
 
+let preScreenX;
+let mouseOffsetScreenX;
+let preScreenY;
+let mouseOffsetScreenY;
+let yAxis = new THREE.Vector3(0, 1, 0);
+let caneraYVec = new THREE.Vector3();
+window.addEventListener('mousemove', e => {
+  pointScreen.x = e.clientX;
+  pointScreen.y = e.clientY;
+
+  if (isKeyWDown) {
+    if (preScreenX) {
+      mouseOffsetScreenX = e.clientX - preScreenX;
+      if (mouseOffsetScreenX > 0) {
+        // playerMesh.rotateY(-0.01);
+        // visualTargetMesh.rotateY(-0.1);
+        visualTargetMesh.rotateOnWorldAxis(yAxis, -0.1);
+      } 
+      if (mouseOffsetScreenX < 0){
+        // playerMesh.rotateY(0.01);
+        // visualTargetMesh.rotateY(0.1);
+        visualTargetMesh.rotateOnWorldAxis(yAxis, 0.1);
+      }
+    }
+    preScreenX = e.clientX;
+  
+    if (preScreenY) {
+      camera.getWorldPosition(caneraYVec);
+      mouseOffsetScreenY = e.clientY - preScreenY;
+      if (mouseOffsetScreenY > 0) {
+        // playerMesh.rotateY(-0.01);
+        if (caneraYVec.y < 5) {
+          visualTargetMesh.rotateX(0.01);
+        }
+      } 
+      if (mouseOffsetScreenY < 0){
+        // playerMesh.rotateY(0.01);
+        if (caneraYVec.y > 0.8) {
+          visualTargetMesh.rotateX(-0.01);
+        }
+      }
+    }
+    preScreenY = e.clientY;
+  }
+})
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+})
 
 window.addEventListener('click', e => {
   checkRaycaster();
 })
 
-window.addEventListener('mousemove', e => {
-  pointScreen.x = e.clientX;
-  pointScreen.y = e.clientY;
-})
-
-
-const clock = new THREE.Clock();
-let deltaTime;
 // 帧循环
 function animate(){
   requestAnimationFrame(animate);
