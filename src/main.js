@@ -29,7 +29,7 @@ const ambientLight = new THREE.AmbientLight(0xffffff,0.2);
 scene.add(ambientLight);
 
 // 方向光
-const directionLight = new THREE.DirectionalLight(0xffffff,0.6);
+const directionLight = new THREE.DirectionalLight(0xffffff,1.2);
 scene.add(directionLight);
 directionLight.position.set(40, 40, 30);
 directionLight.castShadow = true;
@@ -110,6 +110,11 @@ gltfLoader.load('player01.glb', gltf => {
   // camera.position.set(0, 3, -6);
   // camera.lookAt(playerMesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
 
+  playerMesh.traverse(child => {
+    child.receiveShadow = true;
+    child.castShadow = true;
+  })
+
   setThirdViewControl(playerMesh);
 })
 
@@ -123,11 +128,19 @@ gltfLoader.load('yanhuatong01.glb', gltf => {
 })
 gltfLoader.load('scene.glb',(gltf)=>{
   scene.add(gltf.scene);
+  console.log(gltf.scene);
   gltf.scene.traverse(child=>{
     if(child.type === 'Mesh'){
       child.castShadow = true;
       child.receiveShadow = true;
       canRaycastMeshes.push(child);
+    }
+
+    if (child.name === '越野车01-车门-左') {
+      child.traverse(item => {
+        item.userData['ORVFatherDoorObj'] = child;
+        item.userData['isOpen'] = false;
+      })
     }
 
     // if (child.name.indexOf('金蛋') > -1) {
@@ -332,6 +345,21 @@ function checkRaycaster() {
     egg.material = newEggMaterial;
     egg.material.color = new THREE.Color(0, 255, 0);
   }
+
+  if (intersects.length && intersects[0].object.userData['ORVFatherDoorObj']) {
+    const ORVLeftDoor = intersects[0].object.userData['ORVFatherDoorObj'];
+    if (!intersects[0].object.userData['isOpen']) {
+      ORVLeftDoor.rotateY(-1.2);
+      intersects.forEach(item => {
+        item.object.userData['isOpen'] = true;
+      });
+    } else {
+      ORVLeftDoor.rotateY(1.2);
+      intersects.forEach(item => {
+        item.object.userData['isOpen'] = false;
+      });
+    }
+  }
 }
 
 // 角色不动时第三人称控制相机
@@ -343,8 +371,12 @@ function setThirdViewControl(playerMesh) {
   visualTargetMesh = new THREE.Mesh(boxGeo, boxMat);
   scene.add(visualTargetMesh);
   // playerMesh.add(visualTargetMesh);
+
+  playerMesh.position.set(7.9, 0, 14.9);
+  visualTargetMesh.position.set(7.9, 0, 14.9);
+
   visualTargetMesh.add(camera);
-  camera.position.set(0, 3, -6);
+  camera.position.set(0, 5, -6);
   camera.lookAt(visualTargetMesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
   visualTargetMesh.visible = false;
 }
@@ -472,8 +504,9 @@ window.addEventListener('mousedown', e => {
 })
 window.addEventListener('mouseup', e => {
   if (e.button === 0) {
-    // 鼠标左键按下
+    // 鼠标左键抬起
     isKeyWDown = false;
+    console.log(playerMesh.position);
   }
 })
 
@@ -519,12 +552,12 @@ window.addEventListener('mousemove', e => {
       if (mouseOffsetScreenX > 0) {
         // playerMesh.rotateY(-0.01);
         // visualTargetMesh.rotateY(-0.1);
-        visualTargetMesh.rotateOnWorldAxis(yAxis, -0.1);
+        visualTargetMesh.rotateOnWorldAxis(yAxis, -3 * deltaTime);
       } 
       if (mouseOffsetScreenX < 0){
         // playerMesh.rotateY(0.01);
         // visualTargetMesh.rotateY(0.1);
-        visualTargetMesh.rotateOnWorldAxis(yAxis, 0.1);
+        visualTargetMesh.rotateOnWorldAxis(yAxis, 3 * deltaTime);
       }
     }
     preScreenX = e.clientX;
@@ -535,13 +568,13 @@ window.addEventListener('mousemove', e => {
       if (mouseOffsetScreenY > 0) {
         // playerMesh.rotateY(-0.01);
         if (caneraYVec.y < 5) {
-          visualTargetMesh.rotateX(0.01);
+          visualTargetMesh.rotateX(0.8 * deltaTime);
         }
       } 
       if (mouseOffsetScreenY < 0){
         // playerMesh.rotateY(0.01);
         if (caneraYVec.y > 0.8) {
-          visualTargetMesh.rotateX(-0.01);
+          visualTargetMesh.rotateX(-0.8 * deltaTime);
         }
       }
     }
