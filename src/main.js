@@ -10,6 +10,8 @@ console.log(THREE);
 const scene = new THREE.Scene();
 // 创建相机
 const camera = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.01,200);
+const cameraFly = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.01,200);
+cameraFly.visible = false;
 // 创建渲染器
 const renderer = new THREE.WebGLRenderer({antialias: true});
 // 打开renderer阴影
@@ -306,6 +308,8 @@ textureLoader.load('particle02.png', texture => {
 let pointScreen = new THREE.Vector2();
 let pointThreejs = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
+let cameraWorldPos = new THREE.Vector3();
+let cameraWorldQuat = new THREE.Quaternion();
 
 function checkRaycaster() {
   pointThreejs.x = (pointScreen.x / window.innerWidth) * 2 - 1;
@@ -349,12 +353,79 @@ function checkRaycaster() {
   if (intersects.length && intersects[0].object.userData['ORVFatherDoorObj']) {
     const ORVLeftDoor = intersects[0].object.userData['ORVFatherDoorObj'];
     if (!intersects[0].object.userData['isOpen']) {
-      ORVLeftDoor.rotateY(-1.2);
+      // ORVLeftDoor.rotateY(-1.2);
+      gsap.to(ORVLeftDoor.rotation, {
+        y: -1.2,
+        duration: 1,
+        onComplete:() => {
+          camera.getWorldPosition(cameraWorldPos);
+          camera.getWorldQuaternion(cameraWorldQuat);
+          const cameraFlyCurve = new THREE.CatmullRomCurve3( [
+            cameraWorldPos,
+            scene.getObjectByName('越野车01-车外目标').position,
+            scene.getObjectByName('越野车01-车内目标').position,
+          ], false );
+          
+          // const points = cameraFlyCurve.getPoints( 50 );
+          // const geometry = new THREE.BufferGeometry().setFromPoints( points );
+          
+          // const material = new THREE.LineBasicMaterial( { color: 0xff0000 } );
+          
+          // Create the final object to add to the scene
+          // const curveObject = new THREE.Line( geometry, material );
+          // scene.add(curveObject);
+
+          cameraFly.position.copy(cameraWorldPos);
+          cameraFly.quaternion.copy(cameraWorldQuat);
+          camera.visible = false;
+          cameraFly.visible = true;
+
+          let cameraFlyPosTmp;
+          const ORVLookAtTarget = scene.getObjectByName('越野车01-注视目标');
+
+          const stepObj = {step: 0};
+          gsap.to(stepObj, {
+            step: 1000,
+            duration: 4,
+            onUpdate: () => {
+              cameraFlyPosTmp = cameraFlyCurve.getPointAt(stepObj.step / 1000);
+              cameraFly.position.copy(cameraFlyPosTmp);
+              cameraFly.lookAt(ORVLookAtTarget.position);
+            },
+            onComplete: () => {
+              gsap.to(ORVLeftDoor.rotation, {
+                y: 0,
+                duration: 1
+              })
+              intersects.forEach(item => {
+                item.object.userData['isOpen'] = false;
+              });
+
+              const ORV = scene.getObjectByName('越野车01');
+              ORV.visible = false;
+
+              // const ORVInnerMap = new THREE.TextureLoader().load('carInnerBg.jpg');
+              new THREE.TextureLoader().load('carInnerBg.jpg', ORVInnerMap => {
+                ORVInnerMap.encoding = THREE.sRGBEncoding;
+                const sphereGeo = new THREE.SphereGeometry(4);
+                const sphereMat = new THREE.MeshBasicMaterial({side: THREE.DoubleSide, map: ORVInnerMap});
+                const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+                scene.add(sphereMesh);
+                sphereMesh.position.copy(scene.getObjectByName('越野车01-车内目标').position);
+              })
+            }
+          })
+        }
+      })
       intersects.forEach(item => {
         item.object.userData['isOpen'] = true;
       });
     } else {
-      ORVLeftDoor.rotateY(1.2);
+      // ORVLeftDoor.rotateY(1.2);
+      gsap.to(ORVLeftDoor.rotation, {
+        y: 0,
+        duration: 1
+      })
       intersects.forEach(item => {
         item.object.userData['isOpen'] = false;
       });
@@ -500,6 +571,8 @@ window.addEventListener('mousedown', e => {
   if (e.button === 0) {
     // 鼠标左键按下
     isKeyWDown = true;
+    preScreenX = undefined;
+    preScreenY = undefined;
   }
 })
 window.addEventListener('mouseup', e => {
@@ -546,7 +619,21 @@ window.addEventListener('mousemove', e => {
   pointScreen.x = e.clientX;
   pointScreen.y = e.clientY;
 
-  if (isKeyWDown) {
+  if (isKeyWDown && cameraFly.visible) {
+    if (preScreenX) {
+      mouseOffsetScreenX = e.clientX - preScreenX;
+      // cameraFly.rotateY(-mouseOffsetScreenX * deltaTime);
+      cameraFly.rotateOnWorldAxis(yAxis, -mouseOffsetScreenX * deltaTime);
+    }
+    preScreenX = e.clientX;
+    if (preScreenY) {
+      mouseOffsetScreenY = e.clientY - preScreenY;
+      cameraFly.rotateX(-mouseOffsetScreenY * deltaTime);
+    }
+    preScreenY = e.clientY;
+  }
+
+  if (isKeyWDown && camera.visible) {
     if (preScreenX) {
       mouseOffsetScreenX = e.clientX - preScreenX;
       if (mouseOffsetScreenX > 0) {
@@ -586,6 +673,9 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+
+  cameraFly.aspect = window.innerWidth / window.innerHeight;
+  cameraFly.updateProjectionMatrix();
 })
 
 window.addEventListener('click', e => {
@@ -596,7 +686,13 @@ window.addEventListener('click', e => {
 function animate(){
   requestAnimationFrame(animate);
 
-  renderer.render(scene,camera);
+  if (camera.visible) {
+    renderer.render(scene,camera);
+  }
+
+  if (cameraFly.visible) {
+    renderer.render(scene,cameraFly);
+  }
   
   // controls.update();
 
