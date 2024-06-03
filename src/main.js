@@ -70,7 +70,8 @@ let car01;
 let mixer01;
 let mixerPlayer;
 let playerMesh;
-const canRaycastMeshes = [];
+let canRaycastMeshes = [];
+let playerInSceneCanRaycast = [];
 
 new RGBELoader().load('sky.hdr', hdrTexture => {
   scene.background = hdrTexture;
@@ -204,7 +205,68 @@ gltfLoader.load('scene.glb',(gltf)=>{
 
   const dynamicPosMesh01 = scene.getObjectByName('动态展台01');
   addDynamicType01(dynamicPosMesh01);
+
+  addHotSpot();
+  addHotTsb();
 })
+
+window.changeColor = (i) => {
+  const car = scene.getObjectByName('越野车01-车身');
+  // car.material.color = new THREE.Color(0/255, 255/255, 249/255);
+  const colors = [
+    {r: 0/255, g: 255/255, b: 249/255, duration: 2},
+    {r: 6/255, g: 97/255, b: 18/255, duration: 2},
+    {r: 254/255, g: 154/255, b: 54/255, duration: 2},
+    {r: 200/255, g: 35/255, b: 18/255, duration: 2},
+    {r: 74/255, g: 136/255, b: 238/255, duration: 2},
+    {r: 209/255, g: 163/255, b: 70/255, duration: 2},
+  ]
+  gsap.to(car.material.color, colors[i])
+
+}
+
+window.toggleTsb = () => {
+  const display = document.getElementById('changeColorBox').style.display;
+  document.getElementById('changeColorBox').style.display = display === 'block' ? 'none' : 'block';
+}
+
+// 调色板
+function addHotTsb() {
+  const mapTsb = new THREE.TextureLoader().load( "tsb.png" );
+  const materialTsb  = new THREE.SpriteMaterial( { map: mapTsb } );
+  const spritelTsb = new THREE.Sprite( materialTsb );
+  spritelTsb.name = 'spritelTsb';
+  const tsbHotSpot = scene.getObjectByName('越野车01-调色板');
+  spritelTsb.position.copy(tsbHotSpot.position);
+  scene.add( spritelTsb );
+
+  canRaycastMeshes.push(spritelTsb);
+}
+
+
+// 点击热点
+let spritelEnter, spritelExit;
+function addHotSpot() {
+  const mapEnter = new THREE.TextureLoader().load( "Enter.png" );
+  const materialEnter  = new THREE.SpriteMaterial( { map: mapEnter } );
+  spritelEnter = new THREE.Sprite( materialEnter );
+  spritelEnter.name = 'spritelEnter';
+  const enterHotSpot = scene.getObjectByName('越野车01-车外进入');
+  spritelEnter.position.copy(enterHotSpot.position);
+  scene.add( spritelEnter );
+
+  const mapExit = new THREE.TextureLoader().load( "Exit.png" );
+  const materialExit  = new THREE.SpriteMaterial( { map: mapExit } );
+  spritelExit = new THREE.Sprite( materialExit );
+  spritelExit.name = 'spritelExit';
+  spritelExit.scale.set(0.15, 0.15, 0.15);
+  const exitHotSpot = scene.getObjectByName('越野车01-车内退出');
+  spritelExit.position.copy(exitHotSpot.position);
+  spritelExit.visible = false;
+  scene.add( spritelExit );
+
+  canRaycastMeshes.push(spritelEnter);
+}
 
 let sunMesh, earthMesh, moonMesh;
 function addDynamicType01(mesh) {
@@ -310,13 +372,19 @@ let pointThreejs = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
 let cameraWorldPos = new THREE.Vector3();
 let cameraWorldQuat = new THREE.Quaternion();
+let sphereInnerMesh;
 
 function checkRaycaster() {
   pointThreejs.x = (pointScreen.x / window.innerWidth) * 2 - 1;
   pointThreejs.y = (pointScreen.y / window.innerHeight) * -2 + 1;
   // console.log(pointThreejs.x, pointThreejs.y);
 
-  raycaster.setFromCamera(pointThreejs, camera);
+  if (camera.visible) {
+    raycaster.setFromCamera(pointThreejs, camera);
+  }
+  if (cameraFly.visible) {
+    raycaster.setFromCamera(pointThreejs, cameraFly);
+  }
   const intersects = raycaster.intersectObjects(canRaycastMeshes);
   console.log(intersects);
 
@@ -350,9 +418,16 @@ function checkRaycaster() {
     egg.material.color = new THREE.Color(0, 255, 0);
   }
 
-  if (intersects.length && intersects[0].object.userData['ORVFatherDoorObj']) {
-    const ORVLeftDoor = intersects[0].object.userData['ORVFatherDoorObj'];
-    if (!intersects[0].object.userData['isOpen']) {
+  // 进入车内
+  if (intersects.length && (intersects[0].object.userData['ORVFatherDoorObj'] || intersects[0].object === spritelEnter)) {
+    playerInSceneCanRaycast = [...canRaycastMeshes];
+    canRaycastMeshes.length = 0;
+    canRaycastMeshes.push(spritelExit);
+
+    const ORVLeftDoor = scene.getObjectByName('越野车01-车门-左');
+    if (!intersects[0].object.userData['isOpen'] && !intersects[0].object.userData['isOpening']) {
+      intersects[0].object.userData['isOpening'] = true;
+      spritelEnter.visible = false;
       // ORVLeftDoor.rotateY(-1.2);
       gsap.to(ORVLeftDoor.rotation, {
         y: -1.2,
@@ -403,16 +478,23 @@ function checkRaycaster() {
 
               const ORV = scene.getObjectByName('越野车01');
               ORV.visible = false;
-
+              
               // const ORVInnerMap = new THREE.TextureLoader().load('carInnerBg.jpg');
-              new THREE.TextureLoader().load('carInnerBg.jpg', ORVInnerMap => {
-                ORVInnerMap.encoding = THREE.sRGBEncoding;
-                const sphereGeo = new THREE.SphereGeometry(4);
-                const sphereMat = new THREE.MeshBasicMaterial({side: THREE.DoubleSide, map: ORVInnerMap});
-                const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
-                scene.add(sphereMesh);
-                sphereMesh.position.copy(scene.getObjectByName('越野车01-车内目标').position);
-              })
+              if (!sphereInnerMesh) {
+                new THREE.TextureLoader().load('carInnerBg.jpg', ORVInnerMap => {
+                  spritelExit.visible = true;
+                  ORVInnerMap.encoding = THREE.sRGBEncoding;
+                  const sphereGeo = new THREE.SphereGeometry(1.5);
+                  const sphereMat = new THREE.MeshBasicMaterial({side: THREE.DoubleSide, map: ORVInnerMap});
+                  sphereInnerMesh = new THREE.Mesh(sphereGeo, sphereMat);
+                  scene.add(sphereInnerMesh);
+                  sphereInnerMesh.position.copy(scene.getObjectByName('越野车01-车内目标').position);
+                })
+              } else {
+                sphereInnerMesh.visible = true;
+                spritelExit.visible = true;
+              }
+              intersects[0].object.userData['isOpening'] = false;
             }
           })
         }
@@ -422,16 +504,38 @@ function checkRaycaster() {
       });
     } else {
       // ORVLeftDoor.rotateY(1.2);
-      gsap.to(ORVLeftDoor.rotation, {
-        y: 0,
-        duration: 1
-      })
-      intersects.forEach(item => {
-        item.object.userData['isOpen'] = false;
-      });
+      // gsap.to(ORVLeftDoor.rotation, {
+      //   y: 0,
+      //   duration: 1
+      // })
+      // intersects.forEach(item => {
+      //   item.object.userData['isOpen'] = false;
+      // });
     }
   }
+
+  // 离开车内
+  if (intersects.length && intersects[0].object === spritelExit) {
+    canRaycastMeshes = [...playerInSceneCanRaycast];
+
+    sphereInnerMesh.visible = false;
+    const ORV = scene.getObjectByName('越野车01');
+    ORV.visible = true;
+
+    camera.visible = true;
+    cameraFly.visible = false;
+
+    spritelEnter.visible = true;
+    spritelExit.visible = false;
+  }
+
+  // 调色板
+  if (intersects.length && intersects[0].object.name === 'spritelTsb') {
+    toggleTsb();
+  }
 }
+
+
 
 // 角色不动时第三人称控制相机
 let visualTargetMesh;
@@ -533,6 +637,7 @@ window.addEventListener('keydown', keycode => {
       // 向前
       playerMesh.getWorldDirection(playerFrontVec);
       const raycasterFront = new THREE.Raycaster(playerMesh.position.clone().add(playerFrontOffset), playerFrontVec);
+      raycasterFront.camera = camera;
       const collisionFront = raycasterFront.intersectObjects(canRaycastMeshes);
       // console.log(collisionFront);
       if (collisionFront && collisionFront.length && collisionFront[0].distance < 1.5) {
@@ -541,6 +646,7 @@ window.addEventListener('keydown', keycode => {
   
       // 向上
       const raycasterUp = new THREE.Raycaster(playerMesh.position, playerUpVec);
+      raycasterUp.camera = camera;
       const collisionUp = raycasterUp.intersectObjects(canRaycastMeshes);
       // console.log(collisionUp);
       let maxY = -1;
@@ -555,6 +661,7 @@ window.addEventListener('keydown', keycode => {
       }
       // 向下
       const raycasterDown = new THREE.Raycaster(playerMesh.position, playerDownVec);
+      raycasterDown.camera = camera;
       const collisionDown = raycasterDown.intersectObjects(canRaycastMeshes);
       // console.log(collisionDown);
       if (collisionDown && collisionDown.length && collisionDown[0].distance < 0.6) {

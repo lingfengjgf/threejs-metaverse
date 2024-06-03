@@ -5,9 +5,40 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite + Vue</title>
+    <style>
+      #changeColorBox{
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        img{
+          cursor: pointer;
+        }
+      }
+      .close{
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        padding: 2px 10px;
+        font-size: 20px;
+        color: #fff;
+        background: cornflowerblue;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="changeColorBox">
+      <img src="carColor1.png" onclick="changeColor(0)">
+      <img src="carColor2.png" onclick="changeColor(1)">
+      <img src="carColor3.png" onclick="changeColor(2)">
+      <img src="carColor4.png" onclick="changeColor(3)">
+      <img src="carColor5.png" onclick="changeColor(4)">
+      <img src="carColor6.png" onclick="changeColor(5)">
+      <div class="close" onclick="toggleTsb()">X</div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
