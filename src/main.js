@@ -3,6 +3,8 @@ import gsap from 'gsap';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 console.log(THREE);
 
@@ -67,7 +69,7 @@ const clock = new THREE.Clock();
 let deltaTime;
 
 let car01;
-let mixer01;
+let mixer01, mixerDancer01, mixerDancer02, mixerDancer03;
 let mixerPlayer;
 let playerMesh;
 let canRaycastMeshes = [];
@@ -86,12 +88,26 @@ new RGBELoader().load('sky.hdr', hdrTexture => {
 
 const gltfLoader = new GLTFLoader();
 
+let labelRenderer,nameLabel;
+function setPlayerName() {
+  labelRenderer = new CSS2DRenderer();
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.domElement.style.position = 'absolute';
+  labelRenderer.domElement.style.top = '0px';
+  document.body.appendChild(labelRenderer.domElement);
 
-// window.addEventListener('keydown', e => {
-//   if (e.key === 'f') {
+  const nameDiv = document.createElement('div');
+  nameDiv.textContent = '凌峰';
+  nameDiv.style.color = '#fff';
+  nameDiv.style.padding = '4px 15px';
+  nameDiv.style.background = 'rgba(0, 0, 120, 0.5)';
+  nameDiv.style.borderRadius = '12px';
 
-//   }
-// })
+  nameLabel = new CSS2DObject(nameDiv);
+  playerMesh.add(nameLabel);
+  nameLabel.position.set(0, 3.5, 0);
+}
+
 let actionIdle, actionWalk, actionRun;
 gltfLoader.load('player01.glb', gltf => {
   playerMesh = gltf.scene;
@@ -119,6 +135,8 @@ gltfLoader.load('player01.glb', gltf => {
   })
 
   setThirdViewControl(playerMesh);
+
+  setPlayerName();
 })
 
 let yanhuatongGltf;
@@ -203,6 +221,37 @@ gltfLoader.load('scene.glb',(gltf)=>{
     ease: 'sine.inOut'
   })
 
+  
+  // 跳舞小人
+  gltfLoader.load('dancer.glb', dancer01Gltf => {
+    scene.add(dancer01Gltf.scene);
+    dancer01Gltf.scene.position.copy(scene.getObjectByName('dancer01').position);
+    dancer01Gltf.scene.rotation.copy(scene.getObjectByName('dancer01').rotation);
+    mixerDancer01 = new THREE.AnimationMixer(dancer01Gltf.scene);
+    const clipDancer01 = dancer01Gltf.animations[0];
+    const actionDancer01 = mixerDancer01.clipAction(clipDancer01);
+    actionDancer01.play();
+
+    const dancer02 = clone(dancer01Gltf.scene);
+    scene.add(dancer02);
+    dancer02.position.copy(scene.getObjectByName('dancer02').position);
+    dancer02.rotation.copy(scene.getObjectByName('dancer02').rotation);
+    mixerDancer02 = new THREE.AnimationMixer(dancer02);
+    const clipDancer02 = dancer01Gltf.animations[0];
+    const actionDancer02 = mixerDancer02.clipAction(clipDancer02);
+    actionDancer02.play();
+
+    const dancer03 = clone(dancer01Gltf.scene);
+    scene.add(dancer03);
+    dancer03.position.copy(scene.getObjectByName('dancer03').position);
+    dancer03.rotation.copy(scene.getObjectByName('dancer03').rotation);
+    mixerDancer03 = new THREE.AnimationMixer(dancer03);
+    const clipDancer03 = dancer01Gltf.animations[0];
+    const actionDancer03 = mixerDancer03.clipAction(clipDancer03);
+    actionDancer03.play();
+  })
+
+
   const dynamicPosMesh01 = scene.getObjectByName('动态展台01');
   addDynamicType01(dynamicPosMesh01);
 
@@ -248,12 +297,26 @@ function addHotTsb() {
 let spritelEnter, spritelExit;
 function addHotSpot() {
   const mapEnter = new THREE.TextureLoader().load( "Enter.png" );
-  const materialEnter  = new THREE.SpriteMaterial( { map: mapEnter } );
+  const materialEnter  = new THREE.SpriteMaterial( { map: mapEnter, depthWrite: false } );
   spritelEnter = new THREE.Sprite( materialEnter );
   spritelEnter.name = 'spritelEnter';
+  spritelEnter.scale.set(0.9, 0.9, 0.9);
   const enterHotSpot = scene.getObjectByName('越野车01-车外进入');
   spritelEnter.position.copy(enterHotSpot.position);
   scene.add( spritelEnter );
+
+  gsap.to(spritelEnter.scale, {
+    x: 1.2,
+    y:1.2,
+    z: 1.2,
+    duration:3,
+    repeat: -1
+  })
+  gsap.to(spritelEnter.material, {
+    opacity: 0,
+    duration:3,
+    repeat: -1
+  })
 
   const mapExit = new THREE.TextureLoader().load( "Exit.png" );
   const materialExit  = new THREE.SpriteMaterial( { map: mapExit } );
@@ -325,7 +388,7 @@ textureLoader.load('particle01.png', texture => {
   
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  const material = new THREE.PointsMaterial({color: 0xffffff, map: texture, transparent: true});
+  const material = new THREE.PointsMaterial({color: 0xffffff, map: texture, transparent: true, depthWrite: false});
   const points = new THREE.Points(geometry, material);
 
   gsap.to(points.position, {
@@ -420,6 +483,8 @@ function checkRaycaster() {
 
   // 进入车内
   if (intersects.length && (intersects[0].object.userData['ORVFatherDoorObj'] || intersects[0].object === spritelEnter)) {
+    nameLabel.visible = false;
+
     playerInSceneCanRaycast = [...canRaycastMeshes];
     canRaycastMeshes.length = 0;
     canRaycastMeshes.push(spritelExit);
@@ -516,6 +581,8 @@ function checkRaycaster() {
 
   // 离开车内
   if (intersects.length && intersects[0].object === spritelExit) {
+    nameLabel.visible = true;
+    
     canRaycastMeshes = [...playerInSceneCanRaycast];
 
     sphereInnerMesh.visible = false;
@@ -673,6 +740,7 @@ window.addEventListener('keydown', keycode => {
   }
 })
 
+let mousedownOffsetX, mousedownOffsetY;
 let isKeyWDown = false;
 window.addEventListener('mousedown', e => {
   if (e.button === 0) {
@@ -680,13 +748,22 @@ window.addEventListener('mousedown', e => {
     isKeyWDown = true;
     preScreenX = undefined;
     preScreenY = undefined;
+
+    mousedownOffsetX = e.clientX;
+    mousedownOffsetY = e.clientY;
   }
 })
 window.addEventListener('mouseup', e => {
   if (e.button === 0) {
     // 鼠标左键抬起
     isKeyWDown = false;
-    console.log(playerMesh.position);
+
+    mousedownOffsetX = e.clientX - mousedownOffsetX;
+    mousedownOffsetY = e.clientY - mousedownOffsetY;
+
+    if (Math.abs(mousedownOffsetX) < 5 && Math.abs(mousedownOffsetY) < 5) {
+      checkRaycaster();
+    }
   }
 })
 
@@ -743,32 +820,33 @@ window.addEventListener('mousemove', e => {
   if (isKeyWDown && camera.visible) {
     if (preScreenX) {
       mouseOffsetScreenX = e.clientX - preScreenX;
-      if (mouseOffsetScreenX > 0) {
-        // playerMesh.rotateY(-0.01);
-        // visualTargetMesh.rotateY(-0.1);
-        visualTargetMesh.rotateOnWorldAxis(yAxis, -3 * deltaTime);
-      } 
-      if (mouseOffsetScreenX < 0){
-        // playerMesh.rotateY(0.01);
-        // visualTargetMesh.rotateY(0.1);
-        visualTargetMesh.rotateOnWorldAxis(yAxis, 3 * deltaTime);
-      }
+      // if (mouseOffsetScreenX > 0) {
+      //   visualTargetMesh.rotateOnWorldAxis(yAxis, -3 * deltaTime);
+      // } 
+      // if (mouseOffsetScreenX < 0){
+      //   visualTargetMesh.rotateOnWorldAxis(yAxis, 3 * deltaTime);
+      // }
+      visualTargetMesh.rotateOnWorldAxis(yAxis, -0.3 * mouseOffsetScreenX * deltaTime);
     }
     preScreenX = e.clientX;
   
     if (preScreenY) {
       camera.getWorldPosition(caneraYVec);
       mouseOffsetScreenY = e.clientY - preScreenY;
-      if (mouseOffsetScreenY > 0) {
-        // playerMesh.rotateY(-0.01);
-        if (caneraYVec.y < 5) {
-          visualTargetMesh.rotateX(0.8 * deltaTime);
-        }
-      } 
-      if (mouseOffsetScreenY < 0){
-        // playerMesh.rotateY(0.01);
-        if (caneraYVec.y > 0.8) {
-          visualTargetMesh.rotateX(-0.8 * deltaTime);
+      // if (mouseOffsetScreenY > 0) {
+      //   if (caneraYVec.y < 5) {
+      //     visualTargetMesh.rotateX(0.8 * deltaTime);
+      //   }
+      // } 
+      // if (mouseOffsetScreenY < 0){
+      //   if (caneraYVec.y > 0.8) {
+      //     visualTargetMesh.rotateX(-0.8 * deltaTime);
+      //   }
+      // }
+
+      if (visualTargetMesh){
+        if ((mouseOffsetScreenY > 0 && caneraYVec.y < 5) || (mouseOffsetScreenY < 0 && caneraYVec.y > 0.8)) {
+          visualTargetMesh.rotateX(0.08 * mouseOffsetScreenY * deltaTime);
         }
       }
     }
@@ -778,6 +856,7 @@ window.addEventListener('mousemove', e => {
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
@@ -785,9 +864,9 @@ window.addEventListener('resize', () => {
   cameraFly.updateProjectionMatrix();
 })
 
-window.addEventListener('click', e => {
-  checkRaycaster();
-})
+// window.addEventListener('click', e => {
+//   checkRaycaster();
+// })
 
 // 帧循环
 function animate(){
@@ -799,6 +878,10 @@ function animate(){
 
   if (cameraFly.visible) {
     renderer.render(scene,cameraFly);
+  }
+
+  if (labelRenderer) {
+    labelRenderer.render(scene, camera);
   }
   
   // controls.update();
@@ -821,6 +904,12 @@ function animate(){
 
   if (mixerPlayer) {
     mixerPlayer.update(deltaTime);
+  }
+
+  if (mixerDancer01 && mixerDancer02 && mixerDancer03) {
+    mixerDancer01.update(deltaTime);
+    mixerDancer02.update(deltaTime);
+    mixerDancer03.update(deltaTime);
   }
 }
 
