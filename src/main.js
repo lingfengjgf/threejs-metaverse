@@ -35,10 +35,10 @@ scene.add(ambientLight);
 // 方向光
 const directionLight = new THREE.DirectionalLight(0xffffff,1.2);
 scene.add(directionLight);
-directionLight.position.set(40, 40, 30);
+directionLight.position.set(80, 40, 30);
 directionLight.castShadow = true;
 
-const SHADOW_DISTANCE = 50;
+const SHADOW_DISTANCE = 80;
 directionLight.shadow.camera.near = 0.1;
 directionLight.shadow.camera.far = SHADOW_DISTANCE * 2;
 directionLight.shadow.camera.left = -SHADOW_DISTANCE;
@@ -257,6 +257,7 @@ gltfLoader.load('scene.glb',(gltf)=>{
 
   addHotSpot();
   addHotTsb();
+  addGameTree();
 })
 
 window.changeColor = (i) => {
@@ -374,6 +375,89 @@ function addDynamicType01(mesh) {
     ease: 'none'
   })
 
+}
+
+function addGameTree() {
+  const treeLeftBorn = scene.getObjectByName('游戏-树出生点01');
+  const treeLeftEnd = scene.getObjectByName('游戏-树结束点01');
+
+  const treeRightBorn = scene.getObjectByName('游戏-树出生点02');
+  const treeRightEnd = scene.getObjectByName('游戏-树结束点02');
+
+  gltfLoader.load('tree01.glb', (treeLeftGltf) => {
+    const treeType01 = treeLeftGltf.scene;
+
+    treeType01.traverse(child => {
+      child.receiveShadow = true;
+      child.castShadow = true;
+    })
+
+    let treeCount = 8;
+    const curLeftPos = new THREE.Vector3();
+    const curRightPos = new THREE.Vector3();
+    let scaleRandom;
+
+    // 左侧树
+    for (let i = 0; i < treeCount; i++) {
+      curLeftPos.lerpVectors(treeLeftBorn.position, treeLeftEnd.position, i / treeCount);
+      const treeLeftClone = treeType01.clone();
+      scaleRandom = Math.random() / 2 + 0.7;
+      treeLeftClone.scale.set(scaleRandom, scaleRandom, scaleRandom);
+      treeLeftClone.position.copy(curLeftPos);
+      scene.add(treeLeftClone);
+
+      gsap.to(treeLeftClone.position, {
+        x: treeLeftEnd.position.x,
+        y: treeLeftEnd.position.y,
+        z: treeLeftEnd.position.z,
+        duration: 8 - i,
+        ease: 'none',
+        onComplete: () => {
+          treeLeftClone.position.copy(treeLeftBorn.position);
+
+          gsap.to(treeLeftClone.position, {
+            x: treeLeftEnd.position.x,
+            y: treeLeftEnd.position.y,
+            z: treeLeftEnd.position.z,
+            duration: 8,
+            ease: 'none',
+            repeat: -1
+          })
+        }
+      })
+    }
+
+    // 右侧树
+    for (let i = 0; i < treeCount; i++) {
+      curRightPos.lerpVectors(treeRightBorn.position, treeRightEnd.position, i / treeCount);
+      const treeRightClone = treeType01.clone();
+      scaleRandom = Math.random() / 2 + 0.7;
+      treeRightClone.scale.set(scaleRandom, scaleRandom, scaleRandom);
+      treeRightClone.position.copy(curRightPos);
+      scene.add(treeRightClone);
+
+      gsap.to(treeRightClone.position, {
+        x: treeRightEnd.position.x,
+        y: treeRightEnd.position.y,
+        z: treeRightEnd.position.z,
+        duration: 8 - i,
+        ease: 'none',
+        onComplete: () => {
+          treeRightClone.position.copy(treeRightBorn.position);
+
+          gsap.to(treeRightClone.position, {
+            x: treeRightEnd.position.x,
+            y: treeRightEnd.position.y,
+            z: treeRightEnd.position.z,
+            duration: 8,
+            ease: 'none',
+            repeat: -1
+          })
+        }
+      })
+    }
+
+  })
 }
 
 const textureLoader = new THREE.TextureLoader();
