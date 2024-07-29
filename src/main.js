@@ -105,7 +105,7 @@ function setPlayerName() {
 
   nameLabel = new CSS2DObject(nameDiv);
   playerMesh.add(nameLabel);
-  nameLabel.position.set(0, 3.5, 0);
+  nameLabel.position.set(0, 2.7, 0);
 }
 
 let actionIdle, actionWalk, actionRun;
@@ -154,6 +154,10 @@ gltfLoader.load('scene.glb',(gltf)=>{
     if(child.type === 'Mesh'){
       child.castShadow = true;
       child.receiveShadow = true;
+
+      // 视椎体剔除
+      child.frustumCulled = false;
+
       canRaycastMeshes.push(child);
     }
 
@@ -377,7 +381,18 @@ function addDynamicType01(mesh) {
 
 }
 
+let pickedEnergyUUid;
 function addGameTree() {
+
+  const playerStartPos = scene.getObjectByName('游戏-角色起始点');
+  playerMesh.position.copy(playerStartPos.position);
+  visualTargetMesh.position.copy(playerStartPos.position);
+  playerMesh.rotation.y = 0.7;
+  visualTargetMesh.rotation.y = 0.7;
+
+  const midDecoration = scene.getObjectByName('中间装饰');
+  midDecoration.visible = false;
+
   const treeLeftBorn = scene.getObjectByName('游戏-树出生点01');
   const treeLeftEnd = scene.getObjectByName('游戏-树结束点01');
 
@@ -457,7 +472,100 @@ function addGameTree() {
       })
     }
 
+
+    const energyBallCount = 4;
+    const energyBallTexture = textureLoader.load('energyBall.png');
+    const energyBallGeo = new THREE.PlaneGeometry(1, 1);
+    const energyBallMat = new THREE.MeshBasicMaterial({map: energyBallTexture, transparent: true, side: THREE.DoubleSide});
+    
+    const energyBallLeftBorn = scene.getObjectByName('游戏-能量球出生点01');
+    const energyBallLeftEnd = scene.getObjectByName('游戏-能量球结束点01');
+    for (let i = 0; i < energyBallCount; i++) {
+      if (Math.random() < 0.3) { continue; }
+
+      const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
+      energyBallClone.rotateY(1);
+      energyBallClone.visible = false;
+      scene.add(energyBallClone);
+      energyBallClone.position.copy(energyBallLeftBorn.position);
+  
+      gsap.to(energyBallClone.position, {
+        x: energyBallLeftEnd.position.x,
+        y: energyBallLeftEnd.position.y,
+        z: energyBallLeftEnd.position.z,
+        duration: 4,
+        delay: i,
+        ease: 'none',
+        repeat: -1,
+        onStart: () => {
+          energyBallClone.visible = true;
+        },
+        onUpdate: () => {
+          checkEnergyCollision(energyBallClone, visualTargetMesh);
+        },
+        onRepeat: () => {
+          energyBallClone.visible = true;
+        }
+      })
+      gsap.to(energyBallClone.rotation, {
+        z: Math.PI * 2,
+        duration: Math.random() * 2 + 2,
+        ease: 'none',
+        repeat: -1
+      })
+    }
+  
+    const energyBallRightBorn = scene.getObjectByName('游戏-能量球出生点02');
+    const energyBallRightEnd = scene.getObjectByName('游戏-能量球结束点02');
+    for (let i = 0; i < energyBallCount; i++) {
+      if (Math.random() < 0.3) { continue; }
+
+      const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
+      energyBallClone.rotateY(1);
+      energyBallClone.visible = false;
+      scene.add(energyBallClone);
+      energyBallClone.position.copy(energyBallRightBorn.position);
+  
+      gsap.to(energyBallClone.position, {
+        x: energyBallRightEnd.position.x,
+        y: energyBallRightEnd.position.y,
+        z: energyBallRightEnd.position.z,
+        duration: 4,
+        delay: i,
+        ease: 'none',
+        repeat: -1,
+        onStart: () => {
+          energyBallClone.visible = true;
+        },
+        onUpdate: () => {
+          checkEnergyCollision(energyBallClone, visualTargetMesh);
+        },
+        onRepeat: () => {
+          energyBallClone.visible = true;
+        }
+      })
+      gsap.to(energyBallClone.rotation, {
+        z: Math.PI * 2,
+        duration: Math.random() * 2 + 2,
+        ease: 'none',
+        repeat: -1
+      })
+    }
+
   })
+
+
+}
+
+function checkEnergyCollision(energyMesh, visualTargetMesh) {
+  const energyBox3 = new THREE.Box3().setFromObject(energyMesh);
+  const playerBox3 = new THREE.Box3().setFromObject(visualTargetMesh);
+
+  if(energyBox3.intersectsBox(playerBox3) && energyMesh.uuid !== pickedEnergyUUid){
+      console.log('碰到了~~~');
+      pickedEnergyUUid = energyMesh.uuid;
+      energyMesh.visible = false;
+  }
 }
 
 const textureLoader = new THREE.TextureLoader();
@@ -697,9 +805,6 @@ function setThirdViewControl(playerMesh) {
   visualTargetMesh = new THREE.Mesh(boxGeo, boxMat);
   scene.add(visualTargetMesh);
   // playerMesh.add(visualTargetMesh);
-
-  playerMesh.position.set(7.9, 0, 14.9);
-  visualTargetMesh.position.set(7.9, 0, 14.9);
 
   visualTargetMesh.add(camera);
   camera.position.set(0, 5, -6);
