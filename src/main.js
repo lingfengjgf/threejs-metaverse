@@ -13,7 +13,9 @@ const scene = new THREE.Scene();
 // 创建相机
 const camera = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.01,200);
 const cameraFly = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.01,200);
+const cameraGame = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.01,200);
 cameraFly.visible = false;
+cameraGame.visible = false;
 // 创建渲染器
 const renderer = new THREE.WebGLRenderer({antialias: true});
 // 打开renderer阴影
@@ -383,15 +385,35 @@ function addDynamicType01(mesh) {
 
 let pickedEnergyUUid;
 function addGameTree() {
+  camera.visible = false;
+  cameraGame.visible = true;
 
-  const playerStartPos = scene.getObjectByName('游戏-角色起始点');
-  playerMesh.position.copy(playerStartPos.position);
-  visualTargetMesh.position.copy(playerStartPos.position);
-  playerMesh.rotation.y = 0.7;
-  visualTargetMesh.rotation.y = 0.7;
+  crossPlay(actionIdle, actionRun);
 
   const midDecoration = scene.getObjectByName('中间装饰');
   midDecoration.visible = false;
+  const playerStartPos = scene.getObjectByName('游戏-角色起始点');
+  playerMesh.position.copy(playerStartPos.position);
+  visualTargetMesh.position.copy(playerStartPos.position);
+  playerMesh.rotation.y = 0.9;
+  visualTargetMesh.rotation.y = 0.9;
+
+  playerMesh.add(cameraGame);
+  cameraGame.position.set(0, 3.5, -4);
+  cameraGame.lookAt(new THREE.Vector3(0, 1.5, 1).add(playerMesh.position));
+
+  const cameraGameWorldPos = new THREE.Vector3();
+  cameraGame.getWorldPosition(cameraGameWorldPos);
+  const cameraGameWorldQuat = new THREE.Quaternion();
+  cameraGame.getWorldQuaternion(cameraGameWorldQuat);
+  
+
+  playerMesh.remove(cameraGame);
+
+  cameraGame.position.copy(cameraGameWorldPos);
+  cameraGame.quaternion.copy(cameraGameWorldQuat);
+
+
 
   const treeLeftBorn = scene.getObjectByName('游戏-树出生点01');
   const treeLeftEnd = scene.getObjectByName('游戏-树结束点01');
@@ -481,13 +503,24 @@ function addGameTree() {
     const energyBallLeftBorn = scene.getObjectByName('游戏-能量球出生点01');
     const energyBallLeftEnd = scene.getObjectByName('游戏-能量球结束点01');
     for (let i = 0; i < energyBallCount; i++) {
-      if (Math.random() < 0.3) { continue; }
+      if (Math.random() < 0.1) { continue; }
 
       const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
       energyBallClone.rotateY(1);
       energyBallClone.visible = false;
       scene.add(energyBallClone);
       energyBallClone.position.copy(energyBallLeftBorn.position);
+
+      if ( i == 1) {
+        energyBallClone.material = energyBallClone.material.clone();
+        energyBallClone.material.color = new THREE.Color(0, 1, 0);
+        energyBallClone.userData['speed'] = 0.2;
+      }
+      if ( i == 3) {
+        energyBallClone.material = energyBallClone.material.clone();
+        energyBallClone.material.color = new THREE.Color(1, 0, 0);
+        energyBallClone.userData['speed'] = -0.4;
+      }
   
       gsap.to(energyBallClone.position, {
         x: energyBallLeftEnd.position.x,
@@ -518,13 +551,24 @@ function addGameTree() {
     const energyBallRightBorn = scene.getObjectByName('游戏-能量球出生点02');
     const energyBallRightEnd = scene.getObjectByName('游戏-能量球结束点02');
     for (let i = 0; i < energyBallCount; i++) {
-      if (Math.random() < 0.3) { continue; }
+      if (Math.random() < 0.1) { continue; }
 
       const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
       energyBallClone.rotateY(1);
       energyBallClone.visible = false;
       scene.add(energyBallClone);
       energyBallClone.position.copy(energyBallRightBorn.position);
+
+      if ( i == 0) {
+        energyBallClone.material = energyBallClone.material.clone();
+        energyBallClone.material.color = new THREE.Color(0, 1, 0);
+        energyBallClone.userData['speed'] = 0.2;
+      }
+      if ( i == 2) {
+        energyBallClone.material = energyBallClone.material.clone();
+        energyBallClone.material.color = new THREE.Color(1, 0, 0);
+        energyBallClone.userData['speed'] = -0.4;
+      }
   
       gsap.to(energyBallClone.position, {
         x: energyBallRightEnd.position.x,
@@ -557,14 +601,26 @@ function addGameTree() {
 
 }
 
+let curGameSpeed = 1;
 function checkEnergyCollision(energyMesh, visualTargetMesh) {
   const energyBox3 = new THREE.Box3().setFromObject(energyMesh);
   const playerBox3 = new THREE.Box3().setFromObject(visualTargetMesh);
+
+  // scene.add(new THREE.Box3Helper(energyBox3))
+  // scene.add(new THREE.Box3Helper(playerBox3))
 
   if(energyBox3.intersectsBox(playerBox3) && energyMesh.uuid !== pickedEnergyUUid){
       console.log('碰到了~~~');
       pickedEnergyUUid = energyMesh.uuid;
       energyMesh.visible = false;
+
+      const speed = energyMesh.userData['speed'];
+      
+      if ((speed < 0 && curGameSpeed > 1) || (speed > 0 && curGameSpeed < 4)) {
+        curGameSpeed += speed;
+        gsap.globalTimeline.timeScale(curGameSpeed);
+        actionRun.timeScale = curGameSpeed;
+      }
   }
 }
 
@@ -830,6 +886,7 @@ let playerFrontVec = new THREE.Vector3(0, 0, 0);
 const playerFrontOffset = new THREE.Vector3(0, 0.9, 0);
 let playerUpVec = new THREE.Vector3(0, 1, 0);
 let playerDownVec = new THREE.Vector3(0, -1, 0);
+let gamePlayerPos = 0; // 角色位置 -1:左边 0:中间 1:右边
 window.addEventListener('keydown', keycode => {
   if (keycode.key === 'w') {
     if (playerMesh) {
@@ -926,6 +983,17 @@ window.addEventListener('keydown', keycode => {
     }
 
 
+  }
+
+  if (gamePlayerPos > -1 && keycode.key === 'ArrowLeft') {
+    playerMesh.translateX(2.3);
+    visualTargetMesh.translateX(2.3);
+    gamePlayerPos--;
+  }
+  if (gamePlayerPos < 1 && keycode.key === 'ArrowRight') {
+    playerMesh.translateX(-2.3);
+    visualTargetMesh.translateX(-2.3);
+    gamePlayerPos++;
   }
 })
 
@@ -1051,6 +1119,9 @@ window.addEventListener('resize', () => {
 
   cameraFly.aspect = window.innerWidth / window.innerHeight;
   cameraFly.updateProjectionMatrix();
+
+  cameraGame.aspect = window.innerWidth / window.innerHeight;
+  cameraGame.updateProjectionMatrix();
 })
 
 // window.addEventListener('click', e => {
@@ -1067,6 +1138,10 @@ function animate(){
 
   if (cameraFly.visible) {
     renderer.render(scene,cameraFly);
+  }
+
+  if (cameraGame.visible) {
+    renderer.render(scene,cameraGame);
   }
 
   if (labelRenderer) {
