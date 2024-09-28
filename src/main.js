@@ -5,6 +5,8 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 
 console.log(THREE);
 
@@ -263,8 +265,46 @@ gltfLoader.load('scene.glb',(gltf)=>{
 
   addHotSpot();
   addHotTsb();
-  addGameTree();
+  // addGameTree();
+
+  addRoadUVAnimation();
+  // addGameStartMeshTriger();
 })
+
+function addGameStartMeshTriger() {
+  const loader = new FontLoader();
+  loader.load('FZLanTingHeiS-L-GB_Regular.json', function (font) {
+    const geometry = new TextGeometry('游戏开始!', {
+      font: font,
+      size: 0.8,
+      height: 0.05,
+      curveSegments: 10,  // 最小为1， 越大字体越圆滑，越消耗性能
+      bevelEnabled: false
+    })
+
+    const mat = new THREE.MeshStandardMaterial();
+    const gameStartTextMesh = new THREE.Mesh(geometry, mat);
+    scene.add(gameStartTextMesh);
+
+    gameStartTextMesh.rotateY(0.8 - 3.14/2);
+    gameStartTextMesh.translateZ(4);
+    gameStartTextMesh.translateX(4);
+    gameStartTextMesh.translateY(0.5);
+  })
+}
+
+function addRoadUVAnimation() {
+  const road = scene.getObjectByName('游戏路面');
+  // road.material.map.generateMipmaps = false;
+  console.log(renderer.capabilities.getMaxAnisotropy());
+  road.material.map.anisotropy = 8;
+  gsap.to(road.material.map.offset, {
+    y: -2,
+    duration: 2,
+    repeat: -1,
+    ease: 'none'
+  })
+}
 
 window.changeColor = (i) => {
   const car = scene.getObjectByName('越野车01-车身');
