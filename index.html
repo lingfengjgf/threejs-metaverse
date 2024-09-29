@@ -27,6 +27,70 @@
         border-radius: 50%;
         cursor: pointer;
       }
+      #gameFinishImg{
+        width: 100px;
+        height: 63px;
+        transition: all 2s ease;
+      }
+      #gameFinish{
+        visibility: hidden;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      #progressAndScore{
+        position: absolute;
+        top: 10%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border-radius: 20px;
+        width: 400px;
+        height: 30px;
+        background: rgba(0, 0, 0, 0.2);
+        box-shadow: rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+        display: none;
+      }
+      #procress{
+        width: 100%;
+        height:30px;
+        border-radius: 20px;
+        background: rgba(0, 255, 0, 0.6);
+      }
+      #score{
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        color: #fff;
+        text-align: center;
+        height: 30px;
+        line-height: 30px;
+      }
+      #exitGame{
+        width: 120px;
+        height: 30px;
+        font-size: 14px;
+        border-radius: 20px;
+        text-align: center;
+        line-height: 30px;
+        background: #e93a3a;
+        color: #fff;
+        position: absolute;
+        top: 5%;
+        right: 5%;
+        cursor: pointer;
+        display: none;
+      }
+      #gameFinishScore{
+        width: 100%;
+        height: 100%;
+        font-size: 8px;
+        text-align: center;
+        color: #f60;
+        transition: all 2s ease;
+      }
     </style>
   </head>
   <body>
@@ -39,6 +103,15 @@
       <img src="carColor6.png" onclick="changeColor(5)">
       <div class="close" onclick="toggleTsb()">X</div>
     </div>
+    <div onclick="finishGame()" id="gameFinish">
+      <img src="gameFinish.png" id="gameFinishImg">
+      <div id="gameFinishScore"></div>
+    </div>
+    <div id="progressAndScore">
+      <div id="procress"></div>
+      <div id="score">得分：0</div>
+    </div>
+    <div id="exitGame" onclick="exitGame()">结束游戏</div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

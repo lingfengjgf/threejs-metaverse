@@ -78,6 +78,7 @@ let mixerPlayer;
 let playerMesh;
 let canRaycastMeshes = [];
 let playerInSceneCanRaycast = [];
+let isInGame = false;
 
 new RGBELoader().load('sky.hdr', hdrTexture => {
   scene.background = hdrTexture;
@@ -96,6 +97,7 @@ let labelRenderer,nameLabel;
 function setPlayerName() {
   labelRenderer = new CSS2DRenderer();
   labelRenderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.domElement.style.pointerEvents = 'none';
   labelRenderer.domElement.style.position = 'absolute';
   labelRenderer.domElement.style.top = '0px';
   document.body.appendChild(labelRenderer.domElement);
@@ -229,7 +231,9 @@ gltfLoader.load('scene.glb',(gltf)=>{
     ease: 'sine.inOut'
   })
 
-  
+  const road = scene.getObjectByName('游戏路面');
+  road.visible = false;
+
   // 跳舞小人
   gltfLoader.load('dancer.glb', dancer01Gltf => {
     scene.add(dancer01Gltf.scene);
@@ -265,11 +269,97 @@ gltfLoader.load('scene.glb',(gltf)=>{
 
   addHotSpot();
   addHotTsb();
-  // addGameTree();
 
-  addRoadUVAnimation();
-  // addGameStartMeshTriger();
 })
+
+function startGame() {
+    isInGame = true;
+    nameLabel.visible = false;
+
+    const midDecoration = scene.getObjectByName('中间装饰');
+    midDecoration.visible = false;
+
+    const procress = document.getElementById('procress');
+    gsap.to(procress, {
+      width: '0%',
+      duration: 10
+    })
+
+    const progressAndScore = document.getElementById('progressAndScore');
+    progressAndScore.style.display = 'block';
+
+    const exitGame = document.getElementById('exitGame');
+    exitGame.style.display = 'block';
+
+    initGamePlayerPos();
+    addGameTree();
+    addGameEnergyBall();
+    addRoadUVAnimation();
+    // addGameStartMeshTriger();
+    setTimeout(() => {
+      window.exitGame();
+    }, 10000)
+}
+
+function exitGame() {
+  console.log("gameMesh:",gameMesh)
+  console.log("gameTweens:",gameTweens)
+  gameMesh.forEach(item => {
+    item.traverse(child => {
+      if (child.type === 'Mesh') {
+        console.log("gameMesh child:",child)
+        child.geometry.dispose();
+        if (child.material.map) {
+          child.material.map.dispose();
+        }
+        child.material.dispose();
+      }
+    })
+
+    scene.remove(item);
+  })
+
+  gameTweens.forEach(tween => {
+    tween.kill();
+  })
+
+  const road = scene.getObjectByName('游戏路面');
+  road.visible = false;
+
+  actionRun.timeScale = 1;
+  crossPlay(actionRun, actionIdle);
+
+  isInGame = false;
+  camera.visible = true;
+  cameraGame.visible = false;
+  gamePlayerPos = 0;
+
+  const midDecoration = scene.getObjectByName('中间装饰');
+  midDecoration.visible = true;
+
+  const gameFinish = document.getElementById('gameFinish');
+  gameFinish.style.visibility = "visible";
+
+  const gameFinishImg = document.getElementById('gameFinishImg');
+  gameFinishImg.style.transform = "scale(10)";
+
+  const gameFinishScore = document.getElementById('gameFinishScore');
+  gameFinishScore.innerHTML = gameScore;
+  gameFinishScore.style.transform = "scale(10)";
+}
+
+window.exitGame = exitGame;
+
+window.finishGame = () => {
+  const progressAndScore = document.getElementById('progressAndScore');
+  progressAndScore.style.display = 'none';
+
+  const exitGame = document.getElementById('exitGame');
+  exitGame.style.display = 'none';
+
+  const gameFinish = document.getElementById('gameFinish');
+  gameFinish.style.display = 'none';
+}
 
 function addGameStartMeshTriger() {
   const loader = new FontLoader();
@@ -295,15 +385,19 @@ function addGameStartMeshTriger() {
 
 function addRoadUVAnimation() {
   const road = scene.getObjectByName('游戏路面');
+  road.visible = true;
   // road.material.map.generateMipmaps = false;
   console.log(renderer.capabilities.getMaxAnisotropy());
   road.material.map.anisotropy = 8;
-  gsap.to(road.material.map.offset, {
+  road.material.needsUpdate = true;
+  road.material.map.needsUpdate = true;
+  const roadTween = gsap.to(road.material.map.offset, {
     y: -2,
     duration: 2,
     repeat: -1,
     ease: 'none'
   })
+  gameTweens.push(roadTween);
 }
 
 window.changeColor = (i) => {
@@ -423,24 +517,26 @@ function addDynamicType01(mesh) {
 
 }
 
-let pickedEnergyUUid;
-function addGameTree() {
+function initGamePlayerPos() {
   camera.visible = false;
   cameraGame.visible = true;
 
   crossPlay(actionIdle, actionRun);
 
-  const midDecoration = scene.getObjectByName('中间装饰');
-  midDecoration.visible = false;
   const playerStartPos = scene.getObjectByName('游戏-角色起始点');
   playerMesh.position.copy(playerStartPos.position);
   visualTargetMesh.position.copy(playerStartPos.position);
   playerMesh.rotation.y = 0.9;
   visualTargetMesh.rotation.y = 0.9;
 
+  //游戏角色注视目标
+  const playerLookAtObj = scene.getObjectByName('游戏角色注视目标');
+  playerMesh.lookAt(playerLookAtObj.position.clone().setY(0));
+  visualTargetMesh.lookAt(playerLookAtObj.position.clone().setY(0));
+
   playerMesh.add(cameraGame);
   cameraGame.position.set(0, 3.5, -4);
-  cameraGame.lookAt(new THREE.Vector3(0, 1.5, 1).add(playerMesh.position));
+  cameraGame.lookAt(new THREE.Vector3(0, 1.9, 0.1).add(playerMesh.position));
 
   const cameraGameWorldPos = new THREE.Vector3();
   cameraGame.getWorldPosition(cameraGameWorldPos);
@@ -452,8 +548,12 @@ function addGameTree() {
 
   cameraGame.position.copy(cameraGameWorldPos);
   cameraGame.quaternion.copy(cameraGameWorldQuat);
+}
 
-
+let pickedEnergyUUid;
+const gameMesh = [];
+const gameTweens = [];
+function addGameTree() {
 
   const treeLeftBorn = scene.getObjectByName('游戏-树出生点01');
   const treeLeftEnd = scene.getObjectByName('游戏-树结束点01');
@@ -482,8 +582,8 @@ function addGameTree() {
       treeLeftClone.scale.set(scaleRandom, scaleRandom, scaleRandom);
       treeLeftClone.position.copy(curLeftPos);
       scene.add(treeLeftClone);
-
-      gsap.to(treeLeftClone.position, {
+      gameMesh.push(treeLeftClone);
+      const treeLeftTweens01 = gsap.to(treeLeftClone.position, {
         x: treeLeftEnd.position.x,
         y: treeLeftEnd.position.y,
         z: treeLeftEnd.position.z,
@@ -492,7 +592,7 @@ function addGameTree() {
         onComplete: () => {
           treeLeftClone.position.copy(treeLeftBorn.position);
 
-          gsap.to(treeLeftClone.position, {
+          const treeLeftTweens02 = gsap.to(treeLeftClone.position, {
             x: treeLeftEnd.position.x,
             y: treeLeftEnd.position.y,
             z: treeLeftEnd.position.z,
@@ -500,8 +600,10 @@ function addGameTree() {
             ease: 'none',
             repeat: -1
           })
+          gameTweens.push(treeLeftTweens02);
         }
       })
+      gameTweens.push(treeLeftTweens01);
     }
 
     // 右侧树
@@ -512,8 +614,8 @@ function addGameTree() {
       treeRightClone.scale.set(scaleRandom, scaleRandom, scaleRandom);
       treeRightClone.position.copy(curRightPos);
       scene.add(treeRightClone);
-
-      gsap.to(treeRightClone.position, {
+      gameMesh.push(treeRightClone);
+      const treeRightTweens01 = gsap.to(treeRightClone.position, {
         x: treeRightEnd.position.x,
         y: treeRightEnd.position.y,
         z: treeRightEnd.position.z,
@@ -522,7 +624,7 @@ function addGameTree() {
         onComplete: () => {
           treeRightClone.position.copy(treeRightBorn.position);
 
-          gsap.to(treeRightClone.position, {
+          const treeRightTweens02 = gsap.to(treeRightClone.position, {
             x: treeRightEnd.position.x,
             y: treeRightEnd.position.y,
             z: treeRightEnd.position.z,
@@ -530,110 +632,10 @@ function addGameTree() {
             ease: 'none',
             repeat: -1
           })
+          gameTweens.push(treeRightTweens02);
         }
       })
-    }
-
-
-    const energyBallCount = 4;
-    const energyBallTexture = textureLoader.load('energyBall.png');
-    const energyBallGeo = new THREE.PlaneGeometry(1, 1);
-    const energyBallMat = new THREE.MeshBasicMaterial({map: energyBallTexture, transparent: true, side: THREE.DoubleSide});
-    
-    const energyBallLeftBorn = scene.getObjectByName('游戏-能量球出生点01');
-    const energyBallLeftEnd = scene.getObjectByName('游戏-能量球结束点01');
-    for (let i = 0; i < energyBallCount; i++) {
-      if (Math.random() < 0.1) { continue; }
-
-      const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
-      energyBallClone.rotateY(1);
-      energyBallClone.visible = false;
-      scene.add(energyBallClone);
-      energyBallClone.position.copy(energyBallLeftBorn.position);
-
-      if ( i == 1) {
-        energyBallClone.material = energyBallClone.material.clone();
-        energyBallClone.material.color = new THREE.Color(0, 1, 0);
-        energyBallClone.userData['speed'] = 0.2;
-      }
-      if ( i == 3) {
-        energyBallClone.material = energyBallClone.material.clone();
-        energyBallClone.material.color = new THREE.Color(1, 0, 0);
-        energyBallClone.userData['speed'] = -0.4;
-      }
-  
-      gsap.to(energyBallClone.position, {
-        x: energyBallLeftEnd.position.x,
-        y: energyBallLeftEnd.position.y,
-        z: energyBallLeftEnd.position.z,
-        duration: 4,
-        delay: i,
-        ease: 'none',
-        repeat: -1,
-        onStart: () => {
-          energyBallClone.visible = true;
-        },
-        onUpdate: () => {
-          checkEnergyCollision(energyBallClone, visualTargetMesh);
-        },
-        onRepeat: () => {
-          energyBallClone.visible = true;
-        }
-      })
-      gsap.to(energyBallClone.rotation, {
-        z: Math.PI * 2,
-        duration: Math.random() * 2 + 2,
-        ease: 'none',
-        repeat: -1
-      })
-    }
-  
-    const energyBallRightBorn = scene.getObjectByName('游戏-能量球出生点02');
-    const energyBallRightEnd = scene.getObjectByName('游戏-能量球结束点02');
-    for (let i = 0; i < energyBallCount; i++) {
-      if (Math.random() < 0.1) { continue; }
-
-      const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
-      energyBallClone.rotateY(1);
-      energyBallClone.visible = false;
-      scene.add(energyBallClone);
-      energyBallClone.position.copy(energyBallRightBorn.position);
-
-      if ( i == 0) {
-        energyBallClone.material = energyBallClone.material.clone();
-        energyBallClone.material.color = new THREE.Color(0, 1, 0);
-        energyBallClone.userData['speed'] = 0.2;
-      }
-      if ( i == 2) {
-        energyBallClone.material = energyBallClone.material.clone();
-        energyBallClone.material.color = new THREE.Color(1, 0, 0);
-        energyBallClone.userData['speed'] = -0.4;
-      }
-  
-      gsap.to(energyBallClone.position, {
-        x: energyBallRightEnd.position.x,
-        y: energyBallRightEnd.position.y,
-        z: energyBallRightEnd.position.z,
-        duration: 4,
-        delay: i,
-        ease: 'none',
-        repeat: -1,
-        onStart: () => {
-          energyBallClone.visible = true;
-        },
-        onUpdate: () => {
-          checkEnergyCollision(energyBallClone, visualTargetMesh);
-        },
-        onRepeat: () => {
-          energyBallClone.visible = true;
-        }
-      })
-      gsap.to(energyBallClone.rotation, {
-        z: Math.PI * 2,
-        duration: Math.random() * 2 + 2,
-        ease: 'none',
-        repeat: -1
-      })
+      gameTweens.push(treeRightTweens01);
     }
 
   })
@@ -641,7 +643,122 @@ function addGameTree() {
 
 }
 
+function addGameEnergyBall() {
+  
+  const energyBallCount = 4;
+  const energyBallTexture = textureLoader.load('energyBall.png');
+  const energyBallGeo = new THREE.PlaneGeometry(1, 1);
+  const energyBallMat = new THREE.MeshBasicMaterial({map: energyBallTexture, transparent: true, side: THREE.DoubleSide});
+  
+  const energyBallLeftBorn = scene.getObjectByName('游戏-能量球出生点01');
+  const energyBallLeftEnd = scene.getObjectByName('游戏-能量球结束点01');
+  for (let i = 0; i < energyBallCount; i++) {
+    if (Math.random() < 0.1) { continue; }
+
+    const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
+    energyBallClone.rotateY(1);
+    energyBallClone.visible = false;
+    scene.add(energyBallClone);
+    energyBallClone.position.copy(energyBallLeftBorn.position);
+    gameMesh.push(energyBallClone);
+    if ( i == 1) {
+      energyBallClone.material = energyBallClone.material.clone();
+      energyBallClone.material.color = new THREE.Color(0, 1, 0);
+      energyBallClone.userData['speed'] = 0.2;
+    }
+    if ( i == 3) {
+      energyBallClone.material = energyBallClone.material.clone();
+      energyBallClone.material.color = new THREE.Color(1, 0, 0);
+      energyBallClone.userData['speed'] = -0.4;
+    }
+
+    if ( i != 1 && i != 3 ) {
+      energyBallClone.userData['normal'] = true;
+    }
+
+    const energyBallTween01 = gsap.to(energyBallClone.position, {
+      x: energyBallLeftEnd.position.x,
+      y: energyBallLeftEnd.position.y,
+      z: energyBallLeftEnd.position.z,
+      duration: 4,
+      delay: i,
+      ease: 'none',
+      repeat: -1,
+      onStart: () => {
+        energyBallClone.visible = true;
+      },
+      onUpdate: () => {
+        checkEnergyCollision(energyBallClone, visualTargetMesh);
+      },
+      onRepeat: () => {
+        energyBallClone.visible = true;
+      }
+    })
+    const energyBallTween02 = gsap.to(energyBallClone.rotation, {
+      z: Math.PI * 2,
+      duration: Math.random() * 2 + 2,
+      ease: 'none',
+      repeat: -1
+    })
+    gameTweens.push(energyBallTween01, energyBallTween02);
+  }
+
+  const energyBallRightBorn = scene.getObjectByName('游戏-能量球出生点02');
+  const energyBallRightEnd = scene.getObjectByName('游戏-能量球结束点02');
+  for (let i = 0; i < energyBallCount; i++) {
+    if (Math.random() < 0.1) { continue; }
+
+    const energyBallClone = new THREE.Mesh(energyBallGeo, energyBallMat);
+    energyBallClone.rotateY(1);
+    energyBallClone.visible = false;
+    scene.add(energyBallClone);
+    energyBallClone.position.copy(energyBallRightBorn.position);
+    gameMesh.push(energyBallClone);
+    if ( i == 0) {
+      energyBallClone.material = energyBallClone.material.clone();
+      energyBallClone.material.color = new THREE.Color(0, 1, 0);
+      energyBallClone.userData['speed'] = 0.2;
+    }
+    if ( i == 2) {
+      energyBallClone.material = energyBallClone.material.clone();
+      energyBallClone.material.color = new THREE.Color(1, 0, 0);
+      energyBallClone.userData['speed'] = -0.4;
+    }
+
+    if ( i != 1 && i != 2 ) {
+      energyBallClone.userData['normal'] = true;
+    }
+
+    const energyBallTween01 = gsap.to(energyBallClone.position, {
+      x: energyBallRightEnd.position.x,
+      y: energyBallRightEnd.position.y,
+      z: energyBallRightEnd.position.z,
+      duration: 4,
+      delay: i,
+      ease: 'none',
+      repeat: -1,
+      onStart: () => {
+        energyBallClone.visible = true;
+      },
+      onUpdate: () => {
+        checkEnergyCollision(energyBallClone, visualTargetMesh);
+      },
+      onRepeat: () => {
+        energyBallClone.visible = true;
+      }
+    })
+    const energyBallTween02 = gsap.to(energyBallClone.rotation, {
+      z: Math.PI * 2,
+      duration: Math.random() * 2 + 2,
+      ease: 'none',
+      repeat: -1
+    })
+    gameTweens.push(energyBallTween01, energyBallTween02);
+  }
+}
+
 let curGameSpeed = 1;
+let gameScore = 0;
 function checkEnergyCollision(energyMesh, visualTargetMesh) {
   const energyBox3 = new THREE.Box3().setFromObject(energyMesh);
   const playerBox3 = new THREE.Box3().setFromObject(visualTargetMesh);
@@ -661,6 +778,21 @@ function checkEnergyCollision(energyMesh, visualTargetMesh) {
         gsap.globalTimeline.timeScale(curGameSpeed);
         actionRun.timeScale = curGameSpeed;
       }
+
+      if (speed > 0) {
+        gameScore += 20;
+      }
+
+      if (speed < 0) {
+        gameScore -= 20;
+      }
+
+      if (energyMesh.userData['normal']) {
+        gameScore += 10;
+      }
+
+      const score = document.getElementById('score');
+      score.innerHTML = '得分：' + gameScore;
   }
 }
 
@@ -888,6 +1020,11 @@ function checkRaycaster() {
   if (intersects.length && intersects[0].object.name === 'spritelTsb') {
     toggleTsb();
   }
+
+  // 开始游戏
+  if (intersects.length && intersects[0].object.name === "开始游戏文字") {
+    startGame();
+  }
 }
 
 
@@ -928,7 +1065,7 @@ let playerUpVec = new THREE.Vector3(0, 1, 0);
 let playerDownVec = new THREE.Vector3(0, -1, 0);
 let gamePlayerPos = 0; // 角色位置 -1:左边 0:中间 1:右边
 window.addEventListener('keydown', keycode => {
-  if (keycode.key === 'w') {
+  if (keycode.key === 'w' && !isInGame) {
     if (playerMesh) {
       // playerMesh.rotation.copy(visualTargetMesh.rotation);
       const playerDirection =  new THREE.Vector3();
@@ -1025,12 +1162,12 @@ window.addEventListener('keydown', keycode => {
 
   }
 
-  if (gamePlayerPos > -1 && keycode.key === 'ArrowLeft') {
+  if (gamePlayerPos > -1 && keycode.key === 'ArrowLeft' && isInGame) {
     playerMesh.translateX(2.3);
     visualTargetMesh.translateX(2.3);
     gamePlayerPos--;
   }
-  if (gamePlayerPos < 1 && keycode.key === 'ArrowRight') {
+  if (gamePlayerPos < 1 && keycode.key === 'ArrowRight' && isInGame) {
     playerMesh.translateX(-2.3);
     visualTargetMesh.translateX(-2.3);
     gamePlayerPos++;
