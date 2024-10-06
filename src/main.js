@@ -7,6 +7,9 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 console.log(THREE);
 
@@ -79,6 +82,24 @@ let playerMesh;
 let canRaycastMeshes = [];
 let playerInSceneCanRaycast = [];
 let isInGame = false;
+
+
+let effectComposer;
+function initPostProcessing() {
+  effectComposer = new EffectComposer(renderer);
+  const renderPass = new RenderPass(scene, camera);
+  effectComposer.addPass(renderPass);
+
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.25,
+    0.1,
+    0.1
+  )
+  effectComposer.addPass(bloomPass);
+}
+
+initPostProcessing();
 
 new RGBELoader().load('sky.hdr', hdrTexture => {
   scene.background = hdrTexture;
@@ -270,7 +291,28 @@ gltfLoader.load('scene.glb',(gltf)=>{
   addHotSpot();
   addHotTsb();
 
+  // initVideo();
+
 })
+
+function initVideo() {
+  const screen01 = scene.getObjectByName('大屏幕01');
+  const screen02 = scene.getObjectByName('大屏幕02');
+
+  const video = document.createElement('video');
+  video.src = 'car.mp4';
+  video.muted = true;
+  video.autoplay = 'autoplay';
+  video.loop = true;
+  video.play();
+
+  const videoTexture = new THREE.VideoTexture(video);
+  const videoMat = new THREE.MeshBasicMaterial({ map: videoTexture });
+  videoMat.map.flipY = false; //视频方向默认是反的
+
+  screen01.material = videoMat;
+  screen02.material = videoMat;
+}
 
 function startGame() {
     isInGame = true;
@@ -296,14 +338,12 @@ function startGame() {
     addGameEnergyBall();
     addRoadUVAnimation();
     // addGameStartMeshTriger();
-    setTimeout(() => {
-      window.exitGame();
-    }, 10000)
+    // setTimeout(() => {
+    //   window.exitGame();
+    // }, 10000)
 }
 
-function exitGame() {
-  console.log("gameMesh:",gameMesh)
-  console.log("gameTweens:",gameTweens)
+window.exitGame = () => {
   gameMesh.forEach(item => {
     item.traverse(child => {
       if (child.type === 'Mesh') {
@@ -347,8 +387,6 @@ function exitGame() {
   gameFinishScore.innerHTML = gameScore;
   gameFinishScore.style.transform = "scale(10)";
 }
-
-window.exitGame = exitGame;
 
 window.finishGame = () => {
   const progressAndScore = document.getElementById('progressAndScore');
@@ -1100,6 +1138,40 @@ window.addEventListener('keydown', keycode => {
         }
       }
 
+      // 角色碰撞检测
+      // 向前
+      playerMesh.getWorldDirection(playerFrontVec);
+      const raycasterFront = new THREE.Raycaster(playerMesh.position.clone().add(playerFrontOffset), playerFrontVec);
+      raycasterFront.camera = camera;
+      const collisionFront = raycasterFront.intersectObjects(canRaycastMeshes);
+      // console.log(collisionFront);
+      if (collisionFront && collisionFront.length && collisionFront[0].distance < 1.5) {
+        return ;
+      }
+      // 向上
+      const raycasterUp = new THREE.Raycaster(playerMesh.position, playerUpVec);
+      raycasterUp.camera = camera;
+      const collisionUp = raycasterUp.intersectObjects(canRaycastMeshes);
+      // console.log(collisionUp);
+      let maxY = -1;
+      collisionUp.forEach(item => {
+        if (item.distance > 0.01 && item.distance < 0.6 && item.point.y > maxY) {
+          maxY = item.point.y;
+        }
+      })
+      if (maxY != -1) {
+        playerMesh.position.setY(maxY);
+        return ;
+      }
+      // 向下
+      const raycasterDown = new THREE.Raycaster(playerMesh.position, playerDownVec);
+      raycasterDown.camera = camera;
+      const collisionDown = raycasterDown.intersectObjects(canRaycastMeshes);
+      // console.log(collisionDown);
+      if (collisionDown && collisionDown.length && collisionDown[0].distance < 0.6) {
+        playerMesh.position.setY(collisionDown[0].point.y);
+      }
+      
       if (!isWalk) {
         // actionWalk.play();
         crossPlay(actionIdle, actionWalk);
@@ -1121,41 +1193,6 @@ window.addEventListener('keydown', keycode => {
       }
       if (isRun) {
         playerMesh.translateZ(0.2);
-      }
-
-      // 角色碰撞检测
-      // 向前
-      playerMesh.getWorldDirection(playerFrontVec);
-      const raycasterFront = new THREE.Raycaster(playerMesh.position.clone().add(playerFrontOffset), playerFrontVec);
-      raycasterFront.camera = camera;
-      const collisionFront = raycasterFront.intersectObjects(canRaycastMeshes);
-      // console.log(collisionFront);
-      if (collisionFront && collisionFront.length && collisionFront[0].distance < 1.5) {
-        return ;
-      }
-  
-      // 向上
-      const raycasterUp = new THREE.Raycaster(playerMesh.position, playerUpVec);
-      raycasterUp.camera = camera;
-      const collisionUp = raycasterUp.intersectObjects(canRaycastMeshes);
-      // console.log(collisionUp);
-      let maxY = -1;
-      collisionUp.forEach(item => {
-        if (item.distance < 0.6 && item.point.y > maxY) {
-          maxY = item.point.y;
-        }
-      })
-      if (maxY != -1) {
-        playerMesh.position.setY(maxY);
-        return ;
-      }
-      // 向下
-      const raycasterDown = new THREE.Raycaster(playerMesh.position, playerDownVec);
-      raycasterDown.camera = camera;
-      const collisionDown = raycasterDown.intersectObjects(canRaycastMeshes);
-      // console.log(collisionDown);
-      if (collisionDown && collisionDown.length && collisionDown[0].distance < 0.6) {
-        playerMesh.position.setY(collisionDown[0].point.y);
       }
     }
 
@@ -1310,7 +1347,8 @@ function animate(){
   requestAnimationFrame(animate);
 
   if (camera.visible) {
-    renderer.render(scene,camera);
+    // renderer.render(scene,camera);
+    effectComposer.render();
   }
 
   if (cameraFly.visible) {
