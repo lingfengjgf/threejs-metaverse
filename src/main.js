@@ -906,8 +906,12 @@ function checkRaycaster() {
   if (cameraFly.visible) {
     raycaster.setFromCamera(pointThreejs, cameraFly);
   }
+
+  if (cameraGame.visible) {
+    return ;
+  }
   const intersects = raycaster.intersectObjects(canRaycastMeshes);
-  console.log(intersects);
+  // console.log(intersects);
 
   if (intersects.length && intersects[0].object.name === "yanhuatong") {
     const yanhuatong = scene.getObjectByName('yanhuatongGroup');
